@@ -1,26 +1,22 @@
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SVWB記録">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+
     <title>SVWB戦績記録</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 1em; max-width: 600px; margin: auto; background-color: #f4f4f9; color: #333; }
-        .container { background-color: white; padding: 1.5em; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 1em; }
-        label { display: block; margin-bottom: 0.5em; font-weight: bold; }
-        input, select, textarea, button { width: 100%; padding: 0.8em; font-size: 1em; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        textarea { height: 80px; resize: vertical; }
-        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #cccccc; }
-        #status { margin-top: 1em; font-weight: bold; text-align: center; }
-    </style>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
     <div class="container">
-        <div id="authSection">
+        <div id="authSection" style="display:none;">
             <h1>SVWB戦績記録</h1>
             <p>アクセスするには認証が必要です。</p>
             <div class="form-group">
@@ -28,249 +24,69 @@
                 <input type="password" id="secretKey" placeholder="共有された合言葉を入力">
             </div>
             <div id="g_id_onload"
-                 data-client_id="879763336617-co05k6kt4s1tkgtjgbodcter3sqn5gup.apps.googleusercontent.com"
-                 data-callback="handleCredentialResponse"
-                 data-context="signin"
-                 data-ux_mode="popup">
+                 data-client_id="__GOOGLE_CLIENT_ID__"
+                 data-callback="handleCredentialResponse">
             </div>
             <div class="g_id_signin" data-type="standard" data-size="large" data-theme="outline" data-text="sign_in_with" data-shape="rectangular" data-logo_alignment="left"></div>
         </div>
 
         <div id="mainContent" style="display:none;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                 <p id="userInfo"></p>
-                 <button id="signOutButton" style="width: auto; padding: 0.5em 1em;">認証情報クリア</button>
+            <header class="app-header">
+                <p id="userInfo" style="margin: 0;"></p>
+                <button id="signOutButton">認証情報クリア</button>
+            </header>
+
+            <div id="draftSection" style="display:none;">
+                <p style="margin: 0;"><strong>保存された下書きを自動復元しました。</strong></p>
+                <button type="button" id="clearDraftButton">下書きを削除</button>
             </div>
-            <hr>
+            
             <form id="recordForm">
-                <div class="form-group">
-                    <label for="playerName">プレイヤー名:</label>
-                    <select id="playerName" required></select>
+                <div class="form-layout">
+                    <div class="form-column">
+                        <div class="form-group">
+                            <label for="playerName">プレイヤー名:</label>
+                            <select id="playerName" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="myDeck">自分のデッキ:</label>
+                            <select id="myDeck" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="opponentDeck">相手のデッキ:</label>
+                            <select id="opponentDeck" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="opponentRank">相手グループ:</label>
+                            <select id="opponentRank"></select>
+                        </div>
+                    </div>
+                    <div class="form-column">
+                        <div class="form-group">
+                            <label for="turn">先攻/後攻:</label>
+                            <select id="turn" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="winLoss">勝敗:</label>
+                            <select id="winLoss" required></select>
+                        </div>
+                        <div class="form-group" style="flex-grow: 1;">
+                            <label for="remarks">備考:</label>
+                            <textarea id="remarks"></textarea>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="myDeck">自分のデッキ:</label>
-                    <select id="myDeck" required></select>
+
+                <div class="form-actions">
+                    <button type="button" id="draftButton">下書きとして保存</button>
+                    <button type="button" id="submitButton">記録する</button>
                 </div>
-                <div class="form-group">
-                    <label for="opponentDeck">相手のデッキ:</label>
-                    <select id="opponentDeck" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="opponentRank">相手グループ:</label>
-                    <select id="opponentRank"></select>
-                </div>
-                <div class="form-group">
-                    <label for="turn">先攻/後攻:</label>
-                    <select id="turn" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="winLoss">勝敗:</label>
-                    <select id="winLoss" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="remarks">備考:</label>
-                    <textarea id="remarks"></textarea>
-                </div>
-                <button type="submit" id="submitButton">記録する</button>
             </form>
             <p id="status"></p>
         </div>
     </div>
-<script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxkEU0fotn1blb1xsHv2Hvuxiw9ZPK5Wa55Rbe-wHHFD6rStOD0BQmMc9N8ekUZ_udwlQ/exec';
-    const SECRET_KEY_STORAGE = 'svwb_record_secret_key';
-    const GOOGLE_CREDENTIAL_STORAGE = 'svwb_record_google_credential';
 
-    const PLAYER_NAME_STORAGE = 'svwb_player_name';
-    const MY_DECK_STORAGE = 'svwb_my_deck';
-
-    // --- DOM要素を取得 ---
-    const authSection = document.getElementById('authSection');
-    const mainContent = document.getElementById('mainContent');
-    const secretKeyInput = document.getElementById('secretKey');
-    const recordForm = document.getElementById('recordForm');
-    const statusElement = document.getElementById('status');
-    const submitButton = document.getElementById('submitButton');
-    const signOutButton = document.getElementById('signOutButton');
-    const userInfoP = document.getElementById('userInfo');
-
-    // --- スピナー（ドロップダウン）をデータで埋める関数 ---
-    function populateSpinner(spinnerId, data, prompt) {
-        const spinner = document.getElementById(spinnerId);
-        spinner.innerHTML = '';
-        const promptOption = document.createElement('option');
-        promptOption.value = "";
-        promptOption.textContent = prompt;
-        spinner.appendChild(promptOption);
-
-        data.forEach(item => {
-            if (item) {
-                const option = document.createElement('option');
-                option.value = item;
-                option.textContent = item;
-                spinner.appendChild(option);
-            }
-        });
-    }
-
-    // --- Googleログイン成功時に呼び出される関数 ---
-    function handleCredentialResponse(response) {
-        const secret = secretKeyInput.value;
-        if (!secret) {
-            alert('先に合言葉を入力してください。');
-            return;
-        }
-        localStorage.setItem(SECRET_KEY_STORAGE, secret);
-        localStorage.setItem(GOOGLE_CREDENTIAL_STORAGE, response.credential);
-        checkAuth();
-    }
-
-    // --- 認証情報クリア処理 ---
-    signOutButton.addEventListener('click', () => {
-        localStorage.removeItem(SECRET_KEY_STORAGE);
-        localStorage.removeItem(GOOGLE_CREDENTIAL_STORAGE);
-        google.accounts.id.disableAutoSelect();
-        authSection.style.display = 'block';
-        mainContent.style.display = 'none';
-        userInfoP.textContent = "";
-    });
-    
-    // --- 認証状態をチェックし、UIを切り替える関数 ---
-    async function checkAuth() {
-        const storedSecret = localStorage.getItem(SECRET_KEY_STORAGE);
-        const storedCredential = localStorage.getItem(GOOGLE_CREDENTIAL_STORAGE);
-
-        if (storedSecret && storedCredential) {
-            authSection.style.display = 'none';
-            mainContent.style.display = 'block';
-            userInfoP.textContent = "認証済み。データを読み込み中...";
-            userInfoP.style.color = 'blue';
-
-            try {
-                if (document.getElementById('playerName').length <= 1) {
-                    await fetchSheetData();
-                    const cachedPlayerName = localStorage.getItem(PLAYER_NAME_STORAGE);
-                    const cachedMyDeck = localStorage.getItem(MY_DECK_STORAGE);
-                    if (cachedPlayerName) {
-                        document.getElementById('playerName').value = cachedPlayerName;
-                    }
-                    if (cachedMyDeck) {
-                        document.getElementById('myDeck').value = cachedMyDeck;
-                    }
-                }
-                userInfoP.textContent = "認証済み";
-                userInfoP.style.color = 'black';
-            } catch (error) {
-                console.error('データ読み込みに失敗しました:', error);
-                userInfoP.textContent = `エラー: ${error.message} ページを再読み込みしてください。`;
-                userInfoP.style.color = 'red';
-                submitButton.disabled = true; 
-                recordForm.style.opacity = '0.5';
-            }
-        } else {
-            authSection.style.display = 'block';
-            mainContent.style.display = 'none';
-        }
-    }
-
-    // --- フォーム送信ロジック ---
-    recordForm.addEventListener('submit', function(e) {
-        e.preventDefault(); // ページの再読み込みを防止
-
-        const storedSecret = localStorage.getItem(SECRET_KEY_STORAGE);
-        const storedCredential = localStorage.getItem(GOOGLE_CREDENTIAL_STORAGE);
-
-        if (!storedSecret || !storedCredential) {
-            alert('認証情報がありません。ページを再読み込みしてください。');
-            return;
-        }
-
-        // 必須項目が選択されているかチェック
-        if (!document.getElementById('playerName').value || !document.getElementById('myDeck').value || !document.getElementById('opponentDeck').value || !document.getElementById('turn').value || !document.getElementById('winLoss').value) {
-            alert('すべての必須項目を選択してください。');
-            return;
-        }
-
-        const playerNameValue = document.getElementById('playerName').value;
-        const myDeckValue = document.getElementById('myDeck').value;
-        localStorage.setItem(PLAYER_NAME_STORAGE, playerNameValue);
-        localStorage.setItem(MY_DECK_STORAGE, myDeckValue);
-
-        statusElement.textContent = '送信中...';
-        submitButton.disabled = true;
-
-        const formData = {
-            playerName: document.getElementById('playerName').value,
-            myDeck: document.getElementById('myDeck').value,
-            opponentDeck: document.getElementById('opponentDeck').value,
-            opponentRank: document.getElementById('opponentRank').value,
-            turn: document.getElementById('turn').value,
-            winLoss: document.getElementById('winLoss').value,
-            remarks: document.getElementById('remarks').value,
-            secret: storedSecret,
-            id_token: storedCredential
-        };
-
-        fetch(GAS_URL, {
-            method: 'POST',
-            body: JSON.stringify(formData),
-            // GAS側でContent-Typeを正しく解釈させるため、text/plainとして送信
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`サーバーエラー: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.result === 'success') {
-                statusElement.textContent = '記録しました！';
-                document.getElementById('opponentDeck').value = "";
-                document.getElementById('opponentRank').value = "";
-                document.getElementById('turn').value = "";
-                document.getElementById('winLoss').value = "";
-                document.getElementById('remarks').value = "";
-            } else {
-                statusElement.textContent = 'エラー: ' + data.message;
-            }
-        })
-        .catch(error => {
-            console.error('送信エラー:', error);
-            statusElement.textContent = '送信エラー: ' + error.message;
-        })
-        .finally(() => {
-            submitButton.disabled = false; // ボタンを再度有効化
-        });
-    });
-    
-    // --- スプレッドシートの初期データを取得する関数 ---
-    async function fetchSheetData() {
-        try {
-            const response = await fetch(GAS_URL); 
-            if (!response.ok) {
-                throw new Error(`サーバーとの通信に失敗しました (HTTP ${response.status})`);
-            }
-            const data = await response.json();
-
-            if (data.result === 'error') {
-                throw new Error(data.message);
-            }
-
-            populateSpinner('playerName', data.playerNames, "（プレイヤーを選択）");
-            populateSpinner('myDeck', data.deckNames, "（自分のデッキを選択）");
-            populateSpinner('opponentDeck', data.deckNames, "（相手のデッキを選択）");
-            populateSpinner('opponentRank', data.rankNames, "（ランクを選択）");
-            populateSpinner('turn', ['先攻', '後攻'], "（先後を選択）");
-            populateSpinner('winLoss', ['勝ち', '負け'], "（勝敗を選択）");
-            
-        } catch (error) {
-            throw new Error(`初期データの読み込みに失敗しました。詳細: ${error.message}`);
-        }
-    }
-
-    // ページの読み込み時に認証状態をチェック
-    checkAuth();
-</script>
+    <script src="script.js" defer></script>
+    <script src="https://accounts.google.com/gsi/client" defer></script>
 </body>
 </html>

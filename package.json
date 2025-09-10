@@ -1,0 +1,18 @@
+{
+  "name": "svwbrecord-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "script.js",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "npm run build && netlify dev",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "dotenv": "^16.4.5",
+    "replace-in-file": "^7.1.0"
+  }
+}
