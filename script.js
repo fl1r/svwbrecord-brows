@@ -1,10 +1,20 @@
 // --- 定数定義 ---
 const GAS_URL = '__GAS_URL__';
-const SECRET_KEY_STORAGE = 'svwb_record_secret_key';
-const GOOGLE_CREDENTIAL_STORAGE = 'svwb_record_google_credential';
-const PLAYER_NAME_STORAGE = 'svwb_player_name';
-const MY_DECK_STORAGE = 'svwb_my_deck';
-const DRAFT_STORAGE_KEY = 'svwb_record_draft';
+const SECRET_KEY_STORAGE = 'svwbrecord_secret_key';
+const GOOGLE_CREDENTIAL_STORAGE = 'svwbrecord_google_credential';
+const PLAYER_NAME_STORAGE = 'svwbrecord_player_name';
+const MY_DECK_STORAGE = 'svwbrecord_my_deck';
+const DRAFT_STORAGE_KEY = 'svwbrecord_draft';
+
+// ★★★【重要】Firebaseコンソールから取得した設定情報を貼り付け ★★★
+const firebaseConfig = {
+  apiKey: "__FIREBASE_API_KEY__",
+  authDomain: "__FIREBASE_AUTH_DOMAIN__",
+  projectId: "__FIREBASE_PROJECT_ID__",
+  storageBucket: "__FIREBASE_STORAGE_BUCKET__",
+  messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
+  appId: "__FIREBASE_APP_ID__"
+};
 
 // --- DOM要素を取得 ---
 const authSection = document.getElementById('authSection');
@@ -18,58 +28,90 @@ const signOutButton = document.getElementById('signOutButton');
 const userInfoP = document.getElementById('userInfo');
 const draftSection = document.getElementById('draftSection');
 const clearDraftButton = document.getElementById('clearDraftButton');
+const notificationButton = document.getElementById('notification-button');
 
-// --- Service Worker & Push通知 関連 ---
-
-function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.error('Service Worker 登録失敗:', err));
-  }
+// --- Firebase Messaging ---
+let messaging;
+if (firebase.apps.length === 0) {
+  firebase.initializeApp(firebaseConfig);
 }
 
-async function getVapidPublicKey() {
-  const response = await fetch(`${GAS_URL}?action=get_vapid_key`);
-  const data = await response.json();
-  return data.public_key;
+if (firebase.messaging.isSupported()) {
+  messaging = firebase.messaging();
+  notificationButton.style.display = 'inline-block';
+} else {
+  console.log("Firebase Messaging is not supported in this browser.");
+  notificationButton.style.display = 'none';
 }
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
-}
-
-async function requestShortcutNotification() {
+notificationButton.addEventListener('click', async () => {
+  if (!messaging) return;
+  
   try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') return;
-    const registration = await navigator.serviceWorker.ready;
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      const publicKey = await getVapidPublicKey();
-      const applicationServerKey = urlBase64ToUint8Array(publicKey);
-      subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
-      await fetch(GAS_URL, {
-        method: 'POST', body: JSON.stringify({ action: 'save_subscription', subscription }),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-      });
+    // PWAとしてインストールされているかチェック (特にiOSで重要)
+    if (!isPWAInstalled()) {
+      alert('通知を受け取るには、まずアプリをホーム画面に追加してください。\n\nSafariの共有メニューから「ホーム画面に追加」を選択します。');
+      return;
     }
-    await fetch(GAS_URL, {
-      method: 'POST', body: JSON.stringify({ action: 'send_notification_to_self', subscription }),
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-    });
-    console.log("ショートカット通知をリクエストしました。");
+
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      console.log('Notification permission granted.');
+      
+      const token = await messaging.getToken({
+        // ★★★【重要】Firebaseコンソールから取得したVAPIDキーを貼り付け ★★★
+        vapidKey: '__FIREBASE_VAPID_KEY__'
+      });
+      
+      if (token) {
+        console.log('FCM Token:', token);
+        await saveFCMTokenToServer(token);
+        alert('通知が有効になりました！');
+        notificationButton.textContent = '通知は有効です';
+        notificationButton.disabled = true;
+      } else {
+        console.log('No registration token available. Request permission to generate one.');
+      }
+    } else {
+      console.log('Unable to get permission to notify.');
+      alert('通知が許可されませんでした。ブラウザの設定を確認してください。');
+    }
   } catch (err) {
-    console.error("通知リクエスト処理中にエラーが発生しました:", err);
+    console.error('An error occurred while retrieving token. ', err);
+    alert('通知の有効化に失敗しました。コンソールでエラーを確認してください。');
   }
+});
+
+async function saveFCMTokenToServer(token) {
+  const storedSecret = localStorage.getItem(SECRET_KEY_STORAGE);
+  if (!storedSecret) {
+      alert('認証情報がありません。再度ログインしてください。');
+      return;
+  }
+  const response = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'save_fcm_token',
+      token: token,
+      secret: storedSecret
+    })
+  });
+  if (!response.ok) {
+    throw new Error('Failed to save FCM token');
+  }
+  console.log('FCM token saved to server.');
+}
+
+function isPWAInstalled() {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  if (navigator.standalone) { // For older iOS Safari
+    return true;
+  }
+  return isStandalone;
 }
 
 // --- 下書き関連の関数 ---
-
 function saveDraftToLocalStorage() {
   const draftData = {
     playerName: document.getElementById('playerName').value,
@@ -81,6 +123,7 @@ function saveDraftToLocalStorage() {
     remarks: document.getElementById('remarks').value,
   };
   localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+  statusElement.textContent = '下書きを保存しました！';
   checkDraftStatus();
 }
 
@@ -112,7 +155,6 @@ function checkDraftStatus() {
 }
 
 // --- 認証とUI制御 ---
-
 function populateSpinner(spinnerId, data, prompt) {
   const spinner = document.getElementById(spinnerId);
   spinner.innerHTML = '';
@@ -142,12 +184,12 @@ function handleCredentialResponse(response) {
 }
 
 signOutButton.addEventListener('click', () => {
-  localStorage.removeItem(SECRET_KEY_STORAGE);
-  localStorage.removeItem(GOOGLE_CREDENTIAL_STORAGE);
+  localStorage.clear();
   google.accounts.id.disableAutoSelect();
   authSection.style.display = 'block';
   mainContent.style.display = 'none';
   userInfoP.textContent = "";
+  window.location.reload();
 });
 
 async function checkAuth() {
@@ -174,7 +216,6 @@ async function checkAuth() {
       userInfoP.textContent = `エラー: ${error.message}`;
       userInfoP.style.color = 'red';
     }
-    requestShortcutNotification();
     checkDraftStatus();
   } else {
     authSection.style.display = 'block';
@@ -182,20 +223,22 @@ async function checkAuth() {
   }
 }
 
-// --- フォーム操作のイベントリスナー ---
-
+// --- フォーム操作 ---
 submitButton.addEventListener('click', () => submitFormData());
 draftButton.addEventListener('click', () => {
     saveDraftToLocalStorage();
-    requestShortcutNotification();
+    alert('下書きを保存しました。');
 });
-clearDraftButton.addEventListener('click', clearDraftFromLocalStorage);
+clearDraftButton.addEventListener('click', () => {
+    clearDraftFromLocalStorage();
+    statusElement.textContent = '下書きを削除しました。';
+});
 
 function submitFormData() {
   const storedSecret = localStorage.getItem(SECRET_KEY_STORAGE);
   const storedCredential = localStorage.getItem(GOOGLE_CREDENTIAL_STORAGE);
   if (!storedSecret || !storedCredential) {
-    alert('認証情報がありません。ページを再読み込みしてください。');
+    alert('認証情報がありません。');
     return;
   }
   if (!document.getElementById('playerName').value || !document.getElementById('myDeck').value || !document.getElementById('opponentDeck').value || !document.getElementById('turn').value || !document.getElementById('winLoss').value) {
@@ -230,20 +273,18 @@ function submitFormData() {
   .then(response => response.json())
   .then(data => {
     if (data.result === 'success') {
-      statusElement.textContent = '記録しました！';
+      statusElement.textContent = '記録しました！通知が送信されます。';
       document.getElementById('opponentDeck').value = "";
       document.getElementById('opponentRank').value = "";
       document.getElementById('turn').value = "";
       document.getElementById('winLoss').value = "";
       document.getElementById('remarks').value = "";
       clearDraftFromLocalStorage();
-      requestShortcutNotification();
     } else {
       statusElement.textContent = 'エラー: ' + data.message;
     }
   })
   .catch(error => {
-    console.error('送信エラー:', error);
     statusElement.textContent = '送信エラー: ' + error.message;
   })
   .finally(() => {
@@ -274,5 +315,5 @@ async function fetchSheetData() {
 }
 
 // --- ページの初期化処理 ---
-registerServiceWorker();
 checkAuth();
+
